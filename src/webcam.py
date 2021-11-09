@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+from typing import Optional
+
 import pyzbar.pyzbar as pyzbar
 from cv2 import cv2
 
@@ -12,23 +14,28 @@ class WebcamReader:
         self._capture_webcam.set(3, width)
         self._capture_webcam.set(4, height)
 
-    def capture(self) -> bytes:
-        while self._capture_webcam.isOpened() is True:
-            # Capture frame-by-frame
-            _, frame = self._capture_webcam.read()
-            frame_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    def __enter__(self):
+        return self
 
-            # Decode the QR code
-            decoded_objects = pyzbar.decode(frame_image)
-            if len(decoded_objects) == 0:
-                continue
-            elif len(decoded_objects) > 1:
-                # TODO: What to do when there is more than 1 QR CODE
-                continue
+    def is_capturing(self) -> bool:
+        return self._capture_webcam.isOpened()
 
-            decoded_object = decoded_objects[0]
+    def capture(self) -> Optional[bytes]:
+        _, frame = self._capture_webcam.read()
+        frame_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            return decoded_object.data
+        # Decode the QR code
+        decoded_objects = pyzbar.decode(frame_image)
+        if len(decoded_objects) == 0:
+            return
+        elif len(decoded_objects) > 1:
+            # TODO: What to do when there is more than 1 QR CODE
+            return
 
-    def release(self):
+        decoded_object = decoded_objects[0]
+
+        return decoded_object.data
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        print("Releasing the webcam resources")
         self._capture_webcam.release()
