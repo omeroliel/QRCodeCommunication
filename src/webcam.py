@@ -34,7 +34,14 @@ class WebcamReader:
 
         decoded_object = decoded_objects[0]
 
-        return decoded_object.data
+        try:
+            data_to_bytes = bytes.fromhex(decoded_object.data.decode())
+        except ValueError:
+            print("Bad data received")
+
+            return
+
+        return data_to_bytes
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         print("Releasing the webcam resources")

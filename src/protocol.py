@@ -21,7 +21,7 @@ Total length: 16 bytes
 
 class RequestType(Enum):
     waiting = 0
-    start_connection = 1
+    start_connection = 1  # WANT TO SEND FILE
     confirm_connection = 2
     send_data = 3
     confirm_data = 4

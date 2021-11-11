@@ -6,7 +6,6 @@ import qrcode as qrcode
 from cv2 import cv2 as cv
 from numpy import ndarray
 from qrcode import QRCode
-# from pyqrcodeng import QRCode
 
 
 MAX_DATA_SIZE = 2.5 * 1024  # 2KB
@@ -45,6 +44,8 @@ class QRCodeCreator:
 
     def create(self, data: bytes) -> ndarray:
         self._validate_size(data)
+
+        data = data.hex()
 
         image_stream = BytesIO()
 

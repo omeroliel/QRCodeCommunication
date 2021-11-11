@@ -15,7 +15,7 @@ class QRCodeCommunication:
         self._windows_opened = False
 
     def start(self):
-        file_path = r"c:\Users\Omer\Downloads\icons8-instagram-24.png"
+        file_path = r"c:\Users\Omer\Downloads\icons8-menu-16.png"
         file_content = self.read_file(file_path)
 
         request_header = RequestHeader(RequestType.send_data, 1, 1, len(file_content))
