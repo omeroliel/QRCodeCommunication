@@ -1,8 +1,9 @@
 # Main
 import glob
 import os.path
+import time
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional
 
@@ -50,6 +51,16 @@ class QRCodeCommunication:
             while webcam.is_capturing():
                 self.show_image()
 
+                if (
+                    self._status != Status.waiting
+                    and self._last_build is not None
+                    and datetime.now() - self._last_build > timedelta(seconds=10)
+                ):
+                    print("Took too much waiting and nothing happened")
+                    self._reset_and_close()
+
+                    time.sleep(5)
+
                 data = webcam.capture()
 
                 data_valid, header, payload = self._parse_data(data)
@@ -76,6 +87,7 @@ class QRCodeCommunication:
         self._file_array = defaultdict(bytes)
         self._update_status(Status.waiting)
         self._file_name = None
+        self._last_build = None
         self.close_windows()
 
     def _send_data(self, header: RequestHeader, payload: Optional[bytes] = None):

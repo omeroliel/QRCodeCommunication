@@ -45,7 +45,7 @@ class RequestHeader:
 
     def build(self) -> bytes:
         return struct.pack(
-            "<bbHHH8s",
+            "<bbHH8s",
             self.version,
             self.request_type.value,
             self.sequence_number,
@@ -68,7 +68,7 @@ class RequestHeader:
         else:
             self.payload_length = len(payload)
 
-        self.checksum = calculate_hash(self.version, self.request_type.value, self.sequence_number, payload)
+        self.checksum = calculate_hash(self.version, self.request_type, self.sequence_number, payload)
 
 
 def calculate_hash(version: int, request_type: RequestType, sequence: int, payload: Optional[bytes]):
