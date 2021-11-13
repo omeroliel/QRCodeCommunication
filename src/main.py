@@ -24,12 +24,12 @@ class Status(Enum):
 
 NUM_BYTES_PER_MESSAGE = 200
 
+# TODO: Reset status if no answer for too long
+
 
 class QRCodeCommunication:
     def __init__(self):
         self._qr_code_creator = QRCodeCreator()
-
-        self._windows_opened = False
 
         self._received_files_folder = "received-files"
         self._files_to_send_folder = "send-files"
@@ -39,129 +39,144 @@ class QRCodeCommunication:
 
         self._sequence = 0
 
-        self._in_session = False
-        self._in_file_sending = False
-        self._waiting_response = False
-
-        self._messages_count = 0
-
-        self._file_array: dict[bytes] = defaultdict(bytes)
+        self._file_array: dict[int, bytes] = defaultdict(bytes)
         self._file_name = None
         self._current_image = None
 
     def start(self):
         with WebcamReader() as webcam:
+            # TODO: Add caliberation
             while webcam.is_capturing():
                 self.show_image()
 
                 data = webcam.capture()
 
-                if data is not None:
-                    header = RequestHeader.parse(data[:HEADER_LENGTH])
-                    payload = data[HEADER_LENGTH : HEADER_LENGTH + header.payload_length]
+                data_valid, header, payload = self._parse_data(data)
+
+                if not data_valid:
+                    continue
 
                 if data is None and self._status != Status.waiting:
                     continue
 
                 if self._status == Status.waiting:
-                    file_content_to_send, file_name_to_send = self._get_file_to_send()
-
-                    if file_content_to_send is not None:
-                        self._sequence = 0
-                        self._file_array = self._split_content_to_byte_array(file_content_to_send)
-                        self._file_name = file_name_to_send
-
-                        start_session_header = RequestHeader(RequestType.start_connection, self._messages_count, 0)
-                        start_session_header.add_payload()
-
-                        self._update_status(Status.waiting_to_send_file)
-                        self.build_image(start_session_header)
-                    elif data is None:
-                        continue
-                    elif header.request_type == RequestType.start_connection:
-                        self._update_status(Status.receiving_data)
-
-                        accept_session_header = RequestHeader(RequestType.confirm_connection, self._messages_count, 0)
-                        accept_session_header.add_payload()
-                        self.build_image(accept_session_header)
-                    else:
-                        self._current_image = None
-                        self.close_windows()
+                    self._handle_waiting_status(header)
                 elif self._status == Status.waiting_to_send_file:
-                    if header.request_type == RequestType.confirm_connection:
-
-                        send_file_header = RequestHeader(RequestType.send_data, self._messages_count, self._sequence)
-                        send_file_header.add_payload(self._file_array[self._sequence])
-
-                        self.build_image(send_file_header, self._file_array[self._sequence])
-                        self._update_status(Status.sent_data)
+                    self._handle_waiting_to_send_file_status(header)
                 elif self._status == Status.sent_data:
-                    if header.request_type == RequestType.confirm_data and header.sequence_number == self._sequence:
-                        self._sequence += 1
-
-                        if self._sequence == len(self._file_array):
-                            send_finished_header = RequestHeader(RequestType.finish, self._messages_count, 0)
-                            send_finished_header.add_payload()
-
-                            self._update_status(Status.finished)
-                            self.build_image(send_finished_header)
-                        else:
-                            send_file_header = RequestHeader(
-                                RequestType.send_data, self._messages_count, self._sequence
-                            )
-                            send_file_header.add_payload(self._file_array[self._sequence])
-
-                            self.build_image(send_file_header, self._file_array[self._sequence])
-                    elif header.request_type == RequestType.repeat_data and 0 <= header.sequence_number < len(
-                        self._file_array
-                    ):
-                        self._sequence = header.sequence_number
-                        send_file_header = RequestHeader(RequestType.send_data, self._messages_count, self._sequence)
-                        send_file_header.add_payload(self._file_array[self._sequence])
-
-                        self._sequence += 1
-
-                        self.build_image(send_file_header, self._file_array[self._sequence])
+                    self._handle_sent_data_status(header)
                 elif self._status == Status.finished:
-                    if header.request_type == RequestType.confirm_finish:
-                        self._sequence = 0
-                        self._file_array = defaultdict(bytes)
-                        self._update_status(Status.waiting)
-
-                        os.remove(self._files_to_send_folder + "\\" + self._file_name)
-
-                        self._file_name = None
-
-                        self.close_windows()
+                    self._handle_finished_status(header)
                 elif self._status == Status.receiving_data:
-                    if header.request_type == RequestType.send_data:
-                        # TODO: Check checksum
+                    self._handle_receiving_data_status(header, payload)
 
-                        if header.sequence_number not in self._file_array:
-                            print("Received data for sequence", header.sequence_number)
-                            self._file_array[header.sequence_number] = payload
-                            ack_file_header = RequestHeader(
-                                RequestType.confirm_data, self._messages_count, header.sequence_number
-                            )
-                            ack_file_header.add_payload()
-                            self.build_image(ack_file_header)
-                        # else:
-                        #     self._file_array[header.sequence_number] = payload
+    def _handle_receiving_data_status(self, header: RequestHeader, payload: bytes):
+        if header.request_type == RequestType.send_data:
+            # TODO: Check checksum
 
-                    elif header.request_type == RequestType.finish:
-                        file_content = [c for i, c in sorted(list(self._file_array.items()), key=lambda s: s[0])]
-                        open(self._received_files_folder + "\\" + "file", "wb").write(b"".join(file_content))
+            if header.sequence_number not in self._file_array:
+                print("Received data for sequence", header.sequence_number)
+                self._file_array[header.sequence_number] = payload
+                ack_file_header = RequestHeader(RequestType.confirm_data, header.sequence_number)
+                ack_file_header.add_payload()
+                self.build_image(ack_file_header)
 
-                        confirm_finish_header = RequestHeader(
-                            RequestType.confirm_finish, self._messages_count, header.sequence_number
-                        )
-                        confirm_finish_header.add_payload()
+        elif header.request_type == RequestType.finish:
+            file_content = [c for i, c in sorted(list(self._file_array.items()), key=lambda s: s[0])]
+            open(self._received_files_folder + "\\" + "file", "wb").write(b"".join(file_content))
 
-                        self._file_array = defaultdict(bytes)
-                        self.build_image(confirm_finish_header)
-                        self._update_status(Status.waiting)
+            confirm_finish_header = RequestHeader(RequestType.confirm_finish, header.sequence_number)
+            confirm_finish_header.add_payload()
 
-                # time.sleep(5)
+            self._file_array = defaultdict(bytes)
+            self.build_image(confirm_finish_header)
+            self._update_status(Status.waiting)
+
+    def _handle_finished_status(self, header: RequestHeader):
+        # TODO: Handle repeat sequence
+        if header.request_type == RequestType.confirm_finish:
+            self._sequence = 0
+            self._file_array = defaultdict(bytes)
+            self._update_status(Status.waiting)
+
+            os.remove(self._files_to_send_folder + "\\" + self._file_name)
+
+            self._file_name = None
+
+            self.close_windows()
+
+    def _handle_sent_data_status(self, header: RequestHeader):
+        if header.request_type == RequestType.confirm_data and header.sequence_number == self._sequence:
+            self._sequence += 1
+
+            if self._sequence == len(self._file_array):
+                send_finished_header = RequestHeader(RequestType.finish, 0)
+                send_finished_header.add_payload()
+
+                self._update_status(Status.finished)
+                self.build_image(send_finished_header)
+            else:
+                send_file_header = RequestHeader(RequestType.send_data, self._sequence)
+                send_file_header.add_payload(self._file_array[self._sequence])
+
+                self.build_image(send_file_header, self._file_array[self._sequence])
+        elif header.request_type == RequestType.repeat_data and 0 <= header.sequence_number < len(self._file_array):
+            self._sequence = header.sequence_number
+            send_file_header = RequestHeader(RequestType.send_data, self._sequence)
+            send_file_header.add_payload(self._file_array[self._sequence])
+
+            self._sequence += 1
+
+            self.build_image(send_file_header, self._file_array[self._sequence])
+
+    def _handle_waiting_to_send_file_status(self, header: RequestHeader):
+        if header.request_type == RequestType.confirm_connection:
+            send_file_header = RequestHeader(RequestType.send_data, self._sequence)
+            send_file_header.add_payload(self._file_array[self._sequence])
+
+            self.build_image(send_file_header, self._file_array[self._sequence])
+            self._update_status(Status.sent_data)
+
+    def _handle_waiting_status(self, header: RequestHeader) -> None:
+        file_content_to_send, file_name_to_send = self._get_file_to_send()
+
+        if header.request_type == RequestType.start_connection:
+            self._update_status(Status.receiving_data)
+
+            accept_session_header = RequestHeader(RequestType.confirm_connection, 0)
+            accept_session_header.add_payload()
+            self.build_image(accept_session_header)
+        elif file_content_to_send is not None:
+            self._sequence = 0
+            self._file_array = self._split_content_to_byte_array(file_content_to_send)
+            self._file_name = file_name_to_send
+
+            start_session_header = RequestHeader(RequestType.start_connection, 0)
+            start_session_header.add_payload()
+
+            self._update_status(Status.waiting_to_send_file)
+            self.build_image(start_session_header)
+        else:
+            self._current_image = None
+            self.close_windows()
+
+    @staticmethod
+    def _parse_data(data: bytes) -> tuple[bool, Optional[RequestHeader], Optional[bytes]]:
+        header = None
+        payload = None
+        if data is not None:
+            try:
+                header = RequestHeader.parse(data[:HEADER_LENGTH])
+                payload = data[HEADER_LENGTH:]
+
+                if payload != header.payload_length:
+                    raise ValueError("Bad payload length")
+            except ValueError as e:
+                print(f"Received bad data: {e}")
+
+                return False, None, None
+
+        return True, header, payload
 
     def build_image(self, header: RequestHeader, payload: Optional[bytes] = None):
         print(
@@ -179,11 +194,9 @@ class QRCodeCommunication:
 
     @staticmethod
     def _split_content_to_byte_array(content: bytes):
-        y = 0
         byte_array = defaultdict(bytes)
-        for i in range(0, len(content), NUM_BYTES_PER_MESSAGE):
+        for y, i in enumerate(range(0, len(content), NUM_BYTES_PER_MESSAGE)):
             byte_array[y] = content[i : i + NUM_BYTES_PER_MESSAGE]
-            y += 1
 
         return byte_array
 
@@ -202,21 +215,16 @@ class QRCodeCommunication:
         if self._current_image is None:
             return
 
-        # if self._windows_opened is True:
-        #     cv.destroyAllWindows()
-
         cv.imshow("QR Code", self._current_image)
         cv.waitKey(1)
-        self._windows_opened = True
 
     def close_windows(self):
-        cv.destroyAllWindows()
-        self._windows_opened = False
         self._current_image = None
+        cv.destroyAllWindows()
 
-    def read_file(self, file_path: str):
+    @staticmethod
+    def read_file(file_path: str):
         if not os.path.exists(file_path):
-            # TODO
             print("File does not exist")
 
         with open(file_path, "rb") as fp:

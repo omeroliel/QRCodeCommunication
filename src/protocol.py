@@ -10,7 +10,6 @@ from crc64iso.crc64iso import crc64
 Protocol Header:
 Version: 1 byte
 Request type: 1 byte
-Request number: 2 bytes (for example, ACK on this specific sequence)
 Sequence number: 2 bytes
 Payload Length: 2 bytes
 Header + Payload checksum: 8 bytes
@@ -33,13 +32,12 @@ class RequestType(Enum):
 
 
 VERSION = 1
-HEADER_LENGTH = 16
+HEADER_LENGTH = 14
 
 
 @dataclass
 class RequestHeader:
     request_type: RequestType
-    request_number: int
     sequence_number: int
     payload_length: Optional[int] = None
     checksum: Optional[bytes] = None
@@ -50,7 +48,6 @@ class RequestHeader:
             "<bbHHH8s",
             self.version,
             self.request_type.value,
-            self.request_number,
             self.sequence_number,
             self.payload_length,
             self.checksum,
@@ -61,11 +58,9 @@ class RequestHeader:
         if len(data) != HEADER_LENGTH:
             raise ValueError("Header has bad length")
 
-        version, raw_request_type, request_number, sequence_number, payload_length, checksum = struct.unpack(
-            "<bbHHH8s", data
-        )
+        version, raw_request_type, sequence_number, payload_length, checksum = struct.unpack("<bbHH8s", data)
 
-        return cls(RequestType(raw_request_type), request_number, sequence_number, payload_length, checksum, version)
+        return cls(RequestType(raw_request_type), sequence_number, payload_length, checksum, version)
 
     def add_payload(self, payload: Optional[bytes] = None):
         if payload is None:
@@ -79,15 +74,8 @@ class RequestHeader:
         hash_tuple = (
             self.version,
             self.request_type.value,
-            self.request_number,
             self.sequence_number,
             data,
         )
 
         return bytes.fromhex(crc64(str(hash_tuple)))
-
-
-a = RequestHeader(RequestType.finish, 1, 1, 10)
-a.add_payload(b"gfdgfdgfd")
-
-b = 1
