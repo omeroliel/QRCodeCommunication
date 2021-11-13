@@ -24,7 +24,7 @@ class Status(Enum):
 
 
 NUM_BYTES_PER_MESSAGE = 200
-PRINT_INTERVAL = 5 # in seconds
+PRINT_INTERVAL = 5  # in seconds
 
 
 class QRCodeCommunication:
@@ -40,7 +40,9 @@ class QRCodeCommunication:
         self._sequence = 0
 
         self._file_array: dict[int, bytes] = defaultdict(bytes)
-        self._file_name = None
+        self._file_path: Optional[str] = None
+        self._file_suffix: Optional[str] = None
+
         self._current_image = None
         self._last_build = None
 
@@ -73,7 +75,7 @@ class QRCodeCommunication:
                     continue
 
                 if self._status == Status.waiting:
-                    self._handle_waiting_status(header)
+                    self._handle_waiting_status(header, payload)
                 elif self._status == Status.waiting_to_send_file:
                     self._handle_waiting_to_send_file_status(header)
                 elif self._status == Status.sent_data:
@@ -87,13 +89,13 @@ class QRCodeCommunication:
         self._sequence = 0
         self._file_array = defaultdict(bytes)
         self._update_status(Status.waiting)
-        self._file_name = None
+        self._file_path = None
         self._last_build = None
         self.close_windows()
 
     def _send_data(self, header: RequestHeader, payload: Optional[bytes] = None):
         header.add_payload(payload)
-        self._build_image(header)
+        self._build_image(header, payload)
 
     def _print(self, string: str):
         # Reset after 100 lines
@@ -128,7 +130,9 @@ class QRCodeCommunication:
 
                     return
 
-                open(self._received_files_folder + "\\" + "file", "wb").write(b"".join(file_content))
+                file_name = f"File-{datetime.now().isoformat()}{self._file_suffix}"
+
+                open(os.path.join(self._received_files_folder, file_name), "wb").write(b"".join(file_content))
 
             self._send_data(RequestHeader(RequestType.confirm_data, header.sequence_number))
 
@@ -142,7 +146,7 @@ class QRCodeCommunication:
                     RequestHeader(RequestType.send, header.sequence_number), self._file_array[header.sequence_number]
                 )
         elif header.request_type == RequestType.confirm_finish:
-            os.remove(self._files_to_send_folder + "\\" + self._file_name)
+            os.remove(self._file_path)
             self._reset_and_close()
         elif header.request_type == RequestType.confirm_data:
             self._send_data(RequestHeader(RequestType.finish, 0))
@@ -165,18 +169,24 @@ class QRCodeCommunication:
             self._send_data(RequestHeader(RequestType.send_data, self._sequence), self._file_array[self._sequence])
             self._update_status(Status.sent_data)
 
-    def _handle_waiting_status(self, header: RequestHeader) -> None:
-        file_content_to_send, file_name_to_send = self._get_file_to_send()
+    def _handle_waiting_status(self, header: RequestHeader, payload: bytes) -> None:
+        file_content_to_send, file_path = self._get_file_to_send()
 
         if header is not None and header.request_type == RequestType.start_connection:
+            self._file_suffix = payload.decode()
+            if len(payload) > 10:
+                self._file_suffix = None
+
             self._update_status(Status.receiving_data)
+
             self._send_data(RequestHeader(RequestType.confirm_connection, 0))
         elif file_content_to_send is not None:
             self._sequence = 0
             self._file_array = self._split_content_to_byte_array(file_content_to_send)
-            self._file_name = file_name_to_send
+            self._file_path = file_path
+            _, self._file_suffix = os.path.splitext(file_path)
 
-            self._send_data(RequestHeader(RequestType.start_connection, 0))
+            self._send_data(RequestHeader(RequestType.start_connection, 0), self._file_suffix.encode())
             self._update_status(Status.waiting_to_send_file)
         else:
             self._current_image = None
@@ -190,7 +200,7 @@ class QRCodeCommunication:
                 header = RequestHeader.parse(data[:HEADER_LENGTH])
                 payload = data[HEADER_LENGTH:]
 
-                if payload != header.payload_length:
+                if len(payload) != header.payload_length:
                     raise ValueError("Bad payload length")
             except ValueError as e:
                 self._print(f"Received bad data: {e}")
@@ -229,7 +239,7 @@ class QRCodeCommunication:
     def _get_file_to_send(self) -> tuple[Optional[bytes], Optional[str]]:
         for file in glob.glob(self._files_to_send_folder + "/*"):
             with open(file, "rb") as fp:
-                return fp.read(), file.split("\\")[1]
+                return fp.read(), file
 
         return None, None
 
