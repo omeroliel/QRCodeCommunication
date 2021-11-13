@@ -1,4 +1,4 @@
-import asyncio
+import base64
 from io import BytesIO
 
 import numpy
@@ -7,6 +7,7 @@ from cv2 import cv2 as cv
 from numpy import ndarray
 from qrcode import QRCode
 
+from protocol import HEADER_LENGTH
 
 MAX_DATA_SIZE = 2.5 * 1024  # 2KB
 
@@ -15,8 +16,8 @@ class QRCodeCreator:
     def __init__(
         self,
         error_correction_level: int = qrcode.constants.ERROR_CORRECT_H,
-        box_size: int = 5,
-        border: int = 4,
+        box_size: int = 10,
+        border: int = 5,
         fill_color: str = "black",
         back_color: str = "white",
         color_profile: str = "RGB",
@@ -43,14 +44,19 @@ class QRCodeCreator:
         return cv.imdecode(img_array, cv2_image_flag)
 
     def create(self, data: bytes) -> ndarray:
+        if len(data) < HEADER_LENGTH + 10:
+            box_size = 20
+        else:
+            box_size = self._box_size
+
         self._validate_size(data)
 
-        data = data.hex()
+        data = base64.b64encode(data)
 
         image_stream = BytesIO()
 
         qr_code = QRCode(
-            version=1, error_correction=self._error_correction_level, box_size=self._box_size, border=self._border
+            version=1, error_correction=self._error_correction_level, box_size=box_size, border=self._border
         )
 
         qr_code.add_data(data)

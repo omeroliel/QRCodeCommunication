@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import base64
 from typing import Optional
 
 import pyzbar.pyzbar as pyzbar
@@ -35,7 +36,7 @@ class WebcamReader:
         decoded_object = decoded_objects[0]
 
         try:
-            data_to_bytes = bytes.fromhex(decoded_object.data.decode())
+            data_to_bytes = base64.b64decode(decoded_object.data)
         except ValueError:
             print("Bad data received")
 

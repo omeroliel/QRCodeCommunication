@@ -67,8 +67,12 @@ class RequestHeader:
 
         return cls(RequestType(raw_request_type), request_number, sequence_number, payload_length, checksum, version)
 
-    def add_payload(self, payload: bytes):
-        self.payload_length = len(payload)
+    def add_payload(self, payload: Optional[bytes] = None):
+        if payload is None:
+            self.payload_length = 0
+        else:
+            self.payload_length = len(payload)
+
         self.checksum = self._calculate_hash(payload)
 
     def _calculate_hash(self, data: bytes):
