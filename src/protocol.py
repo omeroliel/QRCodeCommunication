@@ -68,14 +68,10 @@ class RequestHeader:
         else:
             self.payload_length = len(payload)
 
-        self.checksum = self._calculate_hash(payload)
+        self.checksum = calculate_hash(self.version, self.request_type.value, self.sequence_number, payload)
 
-    def _calculate_hash(self, data: bytes):
-        hash_tuple = (
-            self.version,
-            self.request_type.value,
-            self.sequence_number,
-            data,
-        )
 
-        return bytes.fromhex(crc64(str(hash_tuple)))
+def calculate_hash(version: int, request_type: RequestType, sequence: int, payload: Optional[bytes]):
+    hash_tuple = (version, request_type.value, sequence, payload)
+
+    return bytes.fromhex(crc64(str(hash_tuple)))

@@ -8,7 +8,7 @@ from typing import Optional
 
 import cv2.cv2 as cv
 
-from protocol import RequestHeader, RequestType, HEADER_LENGTH
+from protocol import RequestHeader, RequestType, HEADER_LENGTH, calculate_hash
 from qr_creator import QRCodeCreator
 from webcam import WebcamReader
 
@@ -70,11 +70,25 @@ class QRCodeCommunication:
                 elif self._status == Status.receiving_data:
                     self._handle_receiving_data_status(header, payload)
 
+    def _reset_and_close(self):
+        self._sequence = 0
+        self._file_array = defaultdict(bytes)
+        self._update_status(Status.waiting)
+        self._file_name = None
+        self.close_windows()
+
+    def _send_data(self, header: RequestHeader, payload: Optional[None]):
+        pass
+
     def _handle_receiving_data_status(self, header: RequestHeader, payload: bytes):
         if header.request_type == RequestType.send_data:
-            # TODO: Check checksum
+            if header.checksum != calculate_hash(header.version, header.request_type, header.sequence_number, payload):
+                print("Checksum failed")
 
-            if header.sequence_number not in self._file_array:
+                repeat_data_header = RequestHeader(RequestType.repeat_data, header.sequence_number)
+                repeat_data_header.add_payload()
+                self.build_image(repeat_data_header)
+            elif header.sequence_number not in self._file_array:
                 print("Received data for sequence", header.sequence_number)
                 self._file_array[header.sequence_number] = payload
                 ack_file_header = RequestHeader(RequestType.confirm_data, header.sequence_number)
@@ -83,7 +97,19 @@ class QRCodeCommunication:
 
         elif header.request_type == RequestType.finish:
             file_content = [c for i, c in sorted(list(self._file_array.items()), key=lambda s: s[0])]
-            open(self._received_files_folder + "\\" + "file", "wb").write(b"".join(file_content))
+            if len(file_content) > 0:
+                max_sequence = max(self._file_array.keys())
+                missing = set(range(max_sequence + 1)) - set(self._file_array.keys())
+
+                if len(missing) > 0:
+                    repeat_data_header = RequestHeader(RequestType.repeat_data, min(missing))
+                    repeat_data_header.add_payload()
+
+                    self.build_image(repeat_data_header)
+
+                    return
+
+                open(self._received_files_folder + "\\" + "file", "wb").write(b"".join(file_content))
 
             confirm_finish_header = RequestHeader(RequestType.confirm_finish, header.sequence_number)
             confirm_finish_header.add_payload()
@@ -93,17 +119,19 @@ class QRCodeCommunication:
             self._update_status(Status.waiting)
 
     def _handle_finished_status(self, header: RequestHeader):
-        # TODO: Handle repeat sequence
-        if header.request_type == RequestType.confirm_finish:
-            self._sequence = 0
-            self._file_array = defaultdict(bytes)
-            self._update_status(Status.waiting)
+        if header.request_type == RequestType.repeat_data:
+            if header.sequence_number < len(self._file_array):
+                send_file_header = RequestHeader(RequestType.send_data, header.sequence_number)
+                send_file_header.add_payload(self._file_array[header.sequence_number])
 
+                self.build_image(send_file_header, self._file_array[header.sequence_number])
+        elif header.request_type == RequestType.confirm_finish:
             os.remove(self._files_to_send_folder + "\\" + self._file_name)
-
-            self._file_name = None
-
-            self.close_windows()
+            self._reset_and_close()
+        elif header.request_type == RequestType.confirm_data:
+            send_finished_header = RequestHeader(RequestType.finish, 0)
+            send_finished_header.add_payload()
+            self.build_image(send_finished_header)
 
     def _handle_sent_data_status(self, header: RequestHeader):
         if header.request_type == RequestType.confirm_data and header.sequence_number == self._sequence:
