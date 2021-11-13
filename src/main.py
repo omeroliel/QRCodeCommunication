@@ -24,8 +24,7 @@ class Status(Enum):
 
 
 NUM_BYTES_PER_MESSAGE = 200
-
-# TODO: Reset status if no answer for too long
+PRINT_INTERVAL = 5 # in seconds
 
 
 class QRCodeCommunication:
@@ -44,6 +43,8 @@ class QRCodeCommunication:
         self._file_name = None
         self._current_image = None
         self._last_build = None
+
+        self._prints: dict[str, datetime] = {}
 
     def start(self):
         with WebcamReader() as webcam:
@@ -94,13 +95,25 @@ class QRCodeCommunication:
         header.add_payload(payload)
         self._build_image(header)
 
+    def _print(self, string: str):
+        # Reset after 100 lines
+        if len(self._prints) == 100:
+            self._prints = {}
+
+        if string in self._prints and datetime.now() - self._prints[string] < timedelta(seconds=PRINT_INTERVAL):
+            return
+
+        self._prints[string] = datetime.now()
+
+        print(string)
+
     def _handle_receiving_data_status(self, header: RequestHeader, payload: bytes):
         if header.request_type == RequestType.send_data:
             if header.checksum != calculate_hash(header.version, header.request_type, header.sequence_number, payload):
-                print("Checksum failed")
+                self._print("Checksum failed")
                 self._send_data(RequestHeader(RequestType.repeat_data, header.sequence_number))
             elif header.sequence_number not in self._file_array:
-                print("Received data for sequence", header.sequence_number)
+                self._print(f"Received data for sequence {header.sequence_number}")
                 self._file_array[header.sequence_number] = payload
                 self._send_data(RequestHeader(RequestType.confirm_data, header.sequence_number))
 
@@ -169,8 +182,7 @@ class QRCodeCommunication:
             self._current_image = None
             self.close_windows()
 
-    @staticmethod
-    def _parse_data(data: bytes) -> tuple[bool, Optional[RequestHeader], Optional[bytes]]:
+    def _parse_data(self, data: bytes) -> tuple[bool, Optional[RequestHeader], Optional[bytes]]:
         header = None
         payload = None
         if data is not None:
@@ -181,14 +193,14 @@ class QRCodeCommunication:
                 if payload != header.payload_length:
                     raise ValueError("Bad payload length")
             except ValueError as e:
-                print(f"Received bad data: {e}")
+                self._print(f"Received bad data: {e}")
 
                 return False, None, None
 
         return True, header, payload
 
     def _build_image(self, header: RequestHeader, payload: Optional[bytes] = None):
-        print(
+        self._print(
             f"Building image for (request={header.request_type.name}, "
             f"sequence={header.sequence_number}, payload_length={header.payload_length}), "
             f"actual payload length: {len(payload) if payload else 0}"
@@ -232,10 +244,9 @@ class QRCodeCommunication:
         self._current_image = None
         cv.destroyAllWindows()
 
-    @staticmethod
-    def read_file(file_path: str):
+    def read_file(self, file_path: str):
         if not os.path.exists(file_path):
-            print("File does not exist")
+            self._print("File does not exist")
 
         with open(file_path, "rb") as fp:
             file_contents = fp.read()

@@ -30,7 +30,7 @@ class WebcamReader:
         if len(decoded_objects) == 0:
             return
         elif len(decoded_objects) > 1:
-            # TODO: What to do when there is more than 1 QR CODE
+            # Too many QR codes. Ignore them.
             return
 
         decoded_object = decoded_objects[0]
