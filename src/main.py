@@ -25,7 +25,7 @@ class Status(Enum):
     receiving_data = 4
 
 
-NUM_BYTES_PER_MESSAGE = 200
+NUM_BYTES_PER_MESSAGE = 150
 PRINT_INTERVAL = 5  # in seconds
 
 
@@ -65,7 +65,7 @@ class QRCodeCommunication:
                     print("Took too much waiting and nothing happened")
                     self._reset_and_close()
 
-                    time.sleep(5)
+                    time.sleep(WAITING_TIMEOUT_SECONDS)
 
                 data = webcam.capture()
 
@@ -76,6 +76,9 @@ class QRCodeCommunication:
 
                 if header is None and self._status != Status.waiting:
                     continue
+
+                if header is not None and self._status != Status.waiting:
+                    self._print(f"Received message. Request Type: {header.request_type.name}. Sequence: {header.sequence_number}")
 
                 if self._status == Status.waiting:
                     self._handle_waiting_status(header, payload)
@@ -133,7 +136,7 @@ class QRCodeCommunication:
 
                     return
 
-                file_name = f"File-{datetime.now().isoformat()}{self._file_suffix}"
+                file_name = f"File-{time.mktime(datetime.now().timetuple())}{self._file_suffix}"
 
                 open(os.path.join(self._received_files_folder, file_name), "wb").write(b"".join(file_content))
 

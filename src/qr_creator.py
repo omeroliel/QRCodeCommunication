@@ -16,7 +16,7 @@ class QRCodeCreator:
     def __init__(
         self,
         error_correction_level: int = qrcode.constants.ERROR_CORRECT_H,
-        box_size: int = 10,
+        box_size: int = 8,
         border: int = 5,
         fill_color: str = "black",
         back_color: str = "white",
