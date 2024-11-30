@@ -26,3 +26,21 @@ def test_parsing(webcam_reader_mock, file_path, request_type, sequence_number, p
     assert header.sequence_number == sequence_number
     assert header.payload_length == payload_length
     assert raw_payload == payload
+
+
+def test_parsing_unrelated_qr_code(webcam_reader_mock):
+    image = cv2.imread("images/unrelated_qr_code.png")
+
+    header, raw_payload = parse_image(webcam_reader_mock, image)
+
+    assert header is None
+    assert raw_payload is None
+
+
+def test_parsing_wounded_qr_code(webcam_reader_mock):
+    image = cv2.imread("images/wounded_qr_code.png")
+
+    header, raw_payload = parse_image(webcam_reader_mock, image)
+
+    assert header is None
+    assert raw_payload is None

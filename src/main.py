@@ -9,7 +9,7 @@ from typing import Optional
 
 import cv2.cv2 as cv
 
-from protocol import RequestHeader, RequestType, HEADER_LENGTH, calculate_hash
+from protocol import RequestHeader, RequestType, HEADER_LENGTH, calculate_hash, VERSION
 from qr_creator import QRCodeCreator
 from webcam import WebcamReader
 
@@ -215,6 +215,9 @@ class QRCodeCommunication:
 
                 if len(payload) != header.payload_length:
                     raise ValueError("Bad payload length")
+
+                if header.version != VERSION:
+                    raise ValueError("Bad header length")
             except ValueError as e:
                 self._print(f"Received bad data: {e}")
 

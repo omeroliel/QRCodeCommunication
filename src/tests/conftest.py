@@ -1,3 +1,4 @@
+from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -46,10 +47,13 @@ def qr_code_communation_mock(webcam_reader_mock):
     return qrcode
 
 
-def parse_image(webcam_reader_mock, image, mode=cv2.COLOR_BGR2GRAY):
+def parse_image(webcam_reader_mock, image, mode=cv2.COLOR_BGR2GRAY) -> tuple[Optional[RequestHeader], Optional[bytes]]:
     webcam_reader_mock._capture_webcam.read.return_value = ("", image)
 
     raw_data = webcam_reader_mock.capture(mode=mode)
+
+    if raw_data is None:
+        return None, None
 
     header = RequestHeader.parse(raw_data[:HEADER_LENGTH])
     raw_payload = raw_data[HEADER_LENGTH:]

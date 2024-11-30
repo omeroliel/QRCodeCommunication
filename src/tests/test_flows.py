@@ -537,7 +537,9 @@ def test_flow_listener_timeout_and_start_again(qr_code_communation_mock, webcam_
 
     mock_open = MockOpen(read_data=b"ABCD" * 64)
 
-    with patch("main.WebcamReader", Test6), patch("main.open", mock_open), patch("main.time.sleep", MagicMock), patch("main.os.mkdir", MagicMock):
+    with patch("main.WebcamReader", Test6), patch("main.open", mock_open), patch("main.time.sleep", MagicMock), patch(
+        "main.os.mkdir", MagicMock
+    ):
         try:
             qr_code_communation_mock.start()
         except StopIteration:
@@ -607,3 +609,54 @@ def test_flow_listener_timeout_and_start_again(qr_code_communation_mock, webcam_
 
         assert parsed_header == expected_header
         assert expected_payload == parsed_payload
+
+
+def test_flow_listener_bad_header_length(qr_code_communation_mock, webcam_reader_mock, qr_creator):
+    qr_codes = []
+
+    header = RequestHeader(request_type=RequestType.start_connection, sequence_number=0)
+    header.add_payload(b"")
+    qr_codes.append((header.build() + b"")[:10])
+
+    class Test7(WebcamReaderMock):
+        def __init__(self):
+            self.capture = MagicMock(side_effect=qr_codes)
+
+    mock_open = MockOpen(read_data=b"ABCD" * 64)
+
+    with patch("main.WebcamReader", Test7), patch("main.open", mock_open), patch("main.time.sleep", MagicMock), patch(
+        "main.os.mkdir", MagicMock
+    ):
+        try:
+            qr_code_communation_mock.start()
+        except StopIteration:
+            pass
+
+    assert mock_open.call_args_list == []
+    assert len(qr_code_communation_mock._qr_code_creator.responses) == 0
+
+
+def test_flow_listener_bad_header_version(qr_code_communation_mock, webcam_reader_mock, qr_creator):
+    qr_codes = []
+
+    header = RequestHeader(request_type=RequestType.start_connection, sequence_number=0)
+    header.add_payload(b"")
+    payload = header.build() + b""
+    qr_codes.append(b"\03" + payload[1:])
+
+    class Test7(WebcamReaderMock):
+        def __init__(self):
+            self.capture = MagicMock(side_effect=qr_codes)
+
+    mock_open = MockOpen(read_data=b"ABCD" * 64)
+
+    with patch("main.WebcamReader", Test7), patch("main.open", mock_open), patch("main.time.sleep", MagicMock), patch(
+        "main.os.mkdir", MagicMock
+    ):
+        try:
+            qr_code_communation_mock.start()
+        except StopIteration:
+            pass
+
+    assert mock_open.call_args_list == []
+    assert len(qr_code_communation_mock._qr_code_creator.responses) == 0
