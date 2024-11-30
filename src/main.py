@@ -13,6 +13,8 @@ from protocol import RequestHeader, RequestType, HEADER_LENGTH, calculate_hash
 from qr_creator import QRCodeCreator
 from webcam import WebcamReader
 
+WAITING_TIMEOUT_SECONDS = 10
+
 
 class Status(Enum):
     waiting = 0
@@ -54,10 +56,11 @@ class QRCodeCommunication:
             while webcam.is_capturing():
                 self.show_image()
 
+                # If we are waiting too long for something, reset and continue
                 if (
-                    self._status != Status.waiting
-                    and self._last_build is not None
-                    and datetime.now() - self._last_build > timedelta(seconds=10)
+                        self._status != Status.waiting
+                        and self._last_build is not None
+                        and datetime.now() - self._last_build > timedelta(seconds=WAITING_TIMEOUT_SECONDS)
                 ):
                     print("Took too much waiting and nothing happened")
                     self._reset_and_close()
@@ -143,7 +146,7 @@ class QRCodeCommunication:
         if header.request_type == RequestType.repeat_data:
             if header.sequence_number < len(self._file_array):
                 self._send_data(
-                    RequestHeader(RequestType.send, header.sequence_number), self._file_array[header.sequence_number]
+                    RequestHeader(RequestType.send_data, header.sequence_number), self._file_array[header.sequence_number]
                 )
         elif header.request_type == RequestType.confirm_finish:
             os.remove(self._file_path)
@@ -228,7 +231,7 @@ class QRCodeCommunication:
     def _split_content_to_byte_array(content: bytes):
         byte_array = defaultdict(bytes)
         for y, i in enumerate(range(0, len(content), NUM_BYTES_PER_MESSAGE)):
-            byte_array[y] = content[i : i + NUM_BYTES_PER_MESSAGE]
+            byte_array[y] = content[i: i + NUM_BYTES_PER_MESSAGE]
 
         return byte_array
 

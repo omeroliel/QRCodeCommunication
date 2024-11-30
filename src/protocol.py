@@ -10,16 +10,15 @@ from crc64iso.crc64iso import crc64
 Protocol Header:
 Version: 1 byte
 Request type: 1 byte
-Sequence number: 2 bytes
-Payload Length: 2 bytes
+Sequence number: 4 bytes
+Payload Length: 4 bytes
 Header + Payload checksum: 8 bytes
 
-Total length: 16 bytes
+Total length: 18 bytes
 """
 
 
 class RequestType(Enum):
-    waiting = 0
     start_connection = 1  # WANT TO SEND FILE
     confirm_connection = 2
     send_data = 3
@@ -27,12 +26,10 @@ class RequestType(Enum):
     repeat_data = 5
     finish = 6
     confirm_finish = 7
-    reset = 8
-    confirm_reset = 9
 
 
 VERSION = 1
-HEADER_LENGTH = 14
+HEADER_LENGTH = 18
 
 
 @dataclass
@@ -45,7 +42,7 @@ class RequestHeader:
 
     def build(self) -> bytes:
         return struct.pack(
-            "<bbHH8s",
+            "<bbii8s",
             self.version,
             self.request_type.value,
             self.sequence_number,
@@ -58,7 +55,7 @@ class RequestHeader:
         if len(data) != HEADER_LENGTH:
             raise ValueError("Header has bad length")
 
-        version, raw_request_type, sequence_number, payload_length, checksum = struct.unpack("<bbHH8s", data)
+        version, raw_request_type, sequence_number, payload_length, checksum = struct.unpack("<bbii8s", data)
 
         return cls(RequestType(raw_request_type), sequence_number, payload_length, checksum, version)
 

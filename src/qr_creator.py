@@ -64,6 +64,7 @@ class QRCodeCreator:
         temp_image = qr_code.make_image(fill_color=self._fill_color, back_color=self._back_color).convert(
             self._color_profile
         )
+
         temp_image.save(image_stream, self._image_type)
 
         qr_code_image = self._create_opencv_image(image_stream)
