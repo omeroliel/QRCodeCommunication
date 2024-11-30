@@ -140,7 +140,7 @@ class QRCodeCommunication:
 
                 open(os.path.join(self._received_files_folder, file_name), "wb").write(b"".join(file_content))
 
-            self._send_data(RequestHeader(RequestType.confirm_data, header.sequence_number))
+            self._send_data(RequestHeader(RequestType.confirm_finish, header.sequence_number))
 
             self._file_array = defaultdict(bytes)
             self._update_status(Status.waiting)
