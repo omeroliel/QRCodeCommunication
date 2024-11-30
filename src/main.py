@@ -138,7 +138,12 @@ class QRCodeCommunication:
 
                 file_name = f"File-{time.mktime(datetime.now().timetuple())}{self._file_suffix}"
 
+                if os.path.exists(self._received_files_folder) is False:
+                    os.mkdir(self._received_files_folder)
+
                 open(os.path.join(self._received_files_folder, file_name), "wb").write(b"".join(file_content))
+
+                self._print(f"File transfer done! file {file_name} was successfully saved.")
 
             self._send_data(RequestHeader(RequestType.confirm_finish, header.sequence_number))
 
