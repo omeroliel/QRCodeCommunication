@@ -37,7 +37,6 @@ class QRCodeCommunication:
         self._files_to_send_folder = "send-files"
 
         self._status = Status.waiting
-        self._last_status_transition = datetime.now()
 
         self._sequence = 0
 
@@ -58,14 +57,14 @@ class QRCodeCommunication:
 
                 # If we are waiting too long for something, reset and continue
                 if (
-                        self._status != Status.waiting
-                        and self._last_build is not None
-                        and datetime.now() - self._last_build > timedelta(seconds=WAITING_TIMEOUT_SECONDS)
+                    self._status != Status.waiting
+                    and self._last_build is not None
+                    and datetime.now() - self._last_build > timedelta(seconds=WAITING_TIMEOUT_SECONDS)
                 ):
                     print("Took too much waiting and nothing happened")
                     self._reset_and_close()
 
-                    time.sleep(WAITING_TIMEOUT_SECONDS)
+                    time.sleep(5)
 
                 data = webcam.capture()
 
@@ -77,8 +76,10 @@ class QRCodeCommunication:
                 if header is None and self._status != Status.waiting:
                     continue
 
-                if header is not None and self._status != Status.waiting:
-                    self._print(f"Received message. Request Type: {header.request_type.name}. Sequence: {header.sequence_number}")
+                if header is not None:
+                    self._print(
+                        f"Received message. Request Type: {header.request_type.name}. Sequence: {header.sequence_number}"
+                    )
 
                 if self._status == Status.waiting:
                     self._handle_waiting_status(header, payload)
@@ -154,7 +155,8 @@ class QRCodeCommunication:
         if header.request_type == RequestType.repeat_data:
             if header.sequence_number < len(self._file_array):
                 self._send_data(
-                    RequestHeader(RequestType.send_data, header.sequence_number), self._file_array[header.sequence_number]
+                    RequestHeader(RequestType.send_data, header.sequence_number),
+                    self._file_array[header.sequence_number],
                 )
         elif header.request_type == RequestType.confirm_finish:
             os.remove(self._file_path)
@@ -233,19 +235,22 @@ class QRCodeCommunication:
         image_payload = header.build() + payload_data
 
         self._current_image = self._qr_code_creator.create(image_payload)
-        self._last_build = datetime.now()
+        self._last_build = self._now()
+
+    @staticmethod
+    def _now():
+        return datetime.now()
 
     @staticmethod
     def _split_content_to_byte_array(content: bytes):
         byte_array = defaultdict(bytes)
         for y, i in enumerate(range(0, len(content), NUM_BYTES_PER_MESSAGE)):
-            byte_array[y] = content[i: i + NUM_BYTES_PER_MESSAGE]
+            byte_array[y] = content[i : i + NUM_BYTES_PER_MESSAGE]
 
         return byte_array
 
     def _update_status(self, status: Status):
         self._status = status
-        self._last_status_transition = datetime.now()
 
     def _get_file_to_send(self) -> tuple[Optional[bytes], Optional[str]]:
         for file in glob.glob(self._files_to_send_folder + "/*"):

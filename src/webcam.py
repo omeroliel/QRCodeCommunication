@@ -8,9 +8,11 @@ from cv2 import cv2
 
 
 class WebcamReader:
-    def __init__(self, font: int = cv2.FONT_HERSHEY_SIMPLEX, width: int = 640, height: int = 480):
+    def __init__(
+        self, font: int = cv2.FONT_HERSHEY_SIMPLEX, width: int = 640, height: int = 480, capture_webcam: Optional = None
+    ):
         self._font = font
-        self._capture_webcam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        self._capture_webcam = capture_webcam or cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
         self._capture_webcam.set(3, width)
         self._capture_webcam.set(4, height)
@@ -21,9 +23,14 @@ class WebcamReader:
     def is_capturing(self) -> bool:
         return self._capture_webcam.isOpened()
 
-    def capture(self) -> Optional[bytes]:
+    def capture(self, mode=cv2.COLOR_BGR2GRAY) -> Optional[bytes]:
         _, frame = self._capture_webcam.read()
-        frame_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        return self.parse_from_image(frame, mode)
+
+    @staticmethod
+    def parse_from_image(frame, mode) -> Optional[bytes]:
+        frame_image = cv2.cvtColor(frame, mode)
 
         # Decode the QR code
         decoded_objects = pyzbar.decode(frame_image)

@@ -1,0 +1,7 @@
+qrcode
+opencv-python
+crc64iso
+pyzbar
+numpy
+pytest
+callee
