@@ -11,7 +11,6 @@ from protocol import HEADER_LENGTH
 
 MAX_DATA_SIZE = 2.5 * 1024  # 2KB
 
-
 class QRCodeCreator:
     def __init__(
         self,
@@ -23,6 +22,7 @@ class QRCodeCreator:
         color_profile: str = "RGB",
         image_type: str = "png",
     ):
+        self.number = 1
         self._error_correction_level = error_correction_level
         self._box_size = box_size
         self._border = border
@@ -65,7 +65,20 @@ class QRCodeCreator:
             self._color_profile
         )
 
+        # For testing purposes
+        image_file = BytesIO()
+        temp_image2 = qr_code.make_image(fill_color=self._fill_color, back_color=self._back_color).convert(
+            self._color_profile
+        )
+        temp_image2.save(image_file, self._image_type)
+
+        with open(f"{self.number}_qr_code.{self._image_type}", "wb") as f:
+            image_file.seek(0)
+            f.write(image_file.read())
+
         temp_image.save(image_stream, self._image_type)
+
+        self.number += 1
 
         qr_code_image = self._create_opencv_image(image_stream)
 
