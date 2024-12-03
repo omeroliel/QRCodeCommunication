@@ -1,4 +1,5 @@
 # Main
+import argparse
 import glob
 import os.path
 import time
@@ -30,10 +31,10 @@ PRINT_INTERVAL = 5  # in seconds
 
 
 class QRCodeCommunication:
-    def __init__(self):
+    def __init__(self, received_files_folder: str):
         self._qr_code_creator = QRCodeCreator()
 
-        self._received_files_folder = "received-files"
+        self._received_files_folder = received_files_folder or "received-files"
         self._files_to_send_folder = "send-files"
 
         self._status = Status.waiting
@@ -51,7 +52,6 @@ class QRCodeCommunication:
 
     def start(self):
         with WebcamReader() as webcam:
-            # TODO: Add caliberation
             while webcam.is_capturing():
                 self.show_image()
 
@@ -284,5 +284,16 @@ class QRCodeCommunication:
 
 
 if __name__ == "__main__":
-    qr_code_communicator = QRCodeCommunication()
+    parser = argparse.ArgumentParser(
+        prog="QRCodeCommunication",
+        description="This app is used in order to share files between 2 computers using the webcam and QR Codes",
+        usage="Run",
+    )
+    parser.add_argument(
+        "--received-files-folder", help="The folder where the received files will be saved", default="received-files"
+    )
+
+    arguments = parser.parse_args()
+
+    qr_code_communicator = QRCodeCommunication(arguments.received_files_folder)
     qr_code_communicator.start()

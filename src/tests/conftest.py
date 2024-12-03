@@ -41,7 +41,7 @@ def qr_creator():
 
 @pytest.fixture
 def qr_code_communation_mock(webcam_reader_mock):
-    qrcode = QRCodeCommunication()
+    qrcode = QRCodeCommunication("received-files")
     qrcode._qr_code_creator = QRCodeCreatorMock()
     qrcode.show_image = MagicMock(return_value=None)
     return qrcode

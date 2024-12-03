@@ -1,4 +1,3 @@
-import hashlib
 import struct
 from dataclasses import dataclass
 from enum import Enum
