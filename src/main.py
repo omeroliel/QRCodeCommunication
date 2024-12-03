@@ -191,6 +191,7 @@ class QRCodeCommunication:
                 self._file_suffix = None
 
             self._update_status(Status.receiving_data)
+            self._print(f"Received a file to save! file suffix: {self._file_suffix}")
 
             self._send_data(RequestHeader(RequestType.confirm_connection, 0))
         elif file_content_to_send is not None:
@@ -198,6 +199,8 @@ class QRCodeCommunication:
             self._file_array = self._split_content_to_byte_array(file_content_to_send)
             self._file_path = file_path
             _, self._file_suffix = os.path.splitext(file_path)
+
+            self._print(f"We found a file to send! file: {file_path}")
 
             self._send_data(RequestHeader(RequestType.start_connection, 0), self._file_suffix.encode())
             self._update_status(Status.waiting_to_send_file)

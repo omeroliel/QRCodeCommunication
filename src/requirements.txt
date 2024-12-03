@@ -1,7 +1,8 @@
-qrcode
-opencv-python
-crc64iso
-pyzbar
-numpy
-pytest
-callee
+qrcode==7.3.1
+opencv-python==4.5.4.58
+crc64iso==0.0.2
+pyzbar==0.1.8
+pillow==11.0.0
+numpy==1.21.4
+pytest==8.3.4
+callee==0.3.1
